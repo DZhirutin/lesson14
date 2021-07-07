@@ -1,0 +1,45 @@
+---
+- name: Wait for ssh connection
+  hosts: all
+  gather_facts: False
+  tasks:
+    - name: Ensure ssh port open
+      wait_for:
+        port: 22
+        delay: 30
+        timeout: 50
+        search_regex: OpenSSH
+        host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
+      vars:
+        ansible_connection: local
+        ansible_python_interpreter: /usr/bin/python3
+
+#Build server
+- name: Build app
+  hosts: all
+  become: yes
+  tasks: 
+    - name: Update repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - name: Install default-jdk git maven
+      apt:
+        pkg: 
+          - default-jdk
+          - git
+          - maven
+
+    - name: Download project from github
+      git:
+       repo: https://github.com/boxfuse/boxfuse-sample-java-war-hello.git 
+       dest: /tmp/boxfuse-sample-java-war-hello/
+    - name: build app maven
+      command: mvn package
+      args:
+       chdir: /tmp/boxfuse-sample-java-war-hello/
+
+    - name: Copy .war file from remote host to local host
+      synchronize:  src={{ item }} dest=/tmp/ mode=pull
+      with_items:
+       - "/tmp/boxfuse-sample-java-war-hello/target/hello-1.0.war"
+                
+
